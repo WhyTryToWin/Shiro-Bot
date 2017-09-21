@@ -1,6 +1,7 @@
 const Discord = require("discord.js")
 const fs = require('fs')
 const client = new Discord.Client()
+const token = require('./DiscordKey.js')
 
 client.on('ready', () => {
   console.log(`Shiro initialized as ${client.user.tag}!`)
@@ -12,8 +13,4 @@ client.on('message', msg => {
   }
 })
 
-fs.readFile('DISCORD_API_KEY', 'UTF8', (err, data) => {
-    if(err)
-        throw new Error("Oh no, something went wrong!")
-    client.login(data)
-})
+client.login(token)
