@@ -11,6 +11,27 @@ client.on('ready', () => {
 
 const headpats = ["https://i.imgur.com/yRcbAsP.gif", "https://i.imgur.com/WyMHuyL.gif"]
 const trigger = ">>"
+const helpMessage = `
+==================
+**Core Command Prefix**: \`>>\`
+==================
+**Shiro's Command List**
+-------------------------
+**Core**: \`help\` \`support\` \`ping\` \`selfroles\`
+**Currency/Social**: \`balance\` \`give\` \`rank\`
+**Misc**: \`conch\` \`choose\` \`cat\` \`catfacts\` \`headpat\` \`bean\`
+**Information**: \`avatar\` \`stats\` \`serverinfo\` \`userinfo\`
+\`\`\`- When using the commands be sure to excluded the aesthetics.
+- For Moderation Command list type >>sudo help.\`\`\`
+`
+
+function Shiro() {
+	this.requestFulfilled = msg => {
+		msg.clearReactions()
+	}
+}
+
+const bot = new Shiro()
 
 client.on('message', msg => {
   if(msg.content.startsWith(trigger + "sudo")) {
@@ -28,9 +49,12 @@ client.on('message', msg => {
   else if(msg.content.startsWith(trigger)) {
     const command = msg.content.split(" ")
     command[0] = command[0].replace(trigger, "")
+    msg.react("🤔")
     switch (command[0]) {
       case "help": {
-        msg.channel.send("Welcome to Shiro!")
+	msg.author.send(helpMessage)
+        msg.channel.send("I sent help your way in the form of a DM!")
+        bot.requestFulfilled(msg)
         break;
       }
       case "headpat": {
@@ -43,7 +67,15 @@ client.on('message', msg => {
             headpats[0]
           ]
         })
+        bot.requestFulfilled(msg)
         break;
+      }
+      case "conch": {
+      	if(command[1]) {
+          const responses = ["absolutely not", "possibly", "ask again", "of course", "isn't it obvious?", "what a stupid question.", "YES!", "nope", "of course not", "I honestly have no clue. I'm just a random shell found somewhere, how could I know?"]
+          msg.reply(`:shell: | **The magic conch shell says:** \`${responses[Math.floor(Math.random() * responses.length)]}\``)
+        }
+        bot.requestFulfilled(msg)
       }
       case "bean": {
         if(command[1])
@@ -53,10 +85,12 @@ client.on('message', msg => {
                 'images/bean.jpg'
               ]
             })
+        bot.requestFulfilled(msg)
         break;
       }
       case "balance": {
         msg.reply("you currently have :gem: 0")
+        bot.requestFulfilled(msg)
         break;
       }
       case "give": {
@@ -64,6 +98,10 @@ client.on('message', msg => {
           msg.react("☑")
           msg.react("❌")
         })
+        bot.requestFulfilled(msg)
+      }
+      default: {
+      	msg.clearReactions()
       }
     }
   }
