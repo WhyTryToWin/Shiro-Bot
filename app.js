@@ -27,7 +27,6 @@ const helpMessage = `
 
 function Shiro() {
 	this.requestFulfilled = msg => {
-		msg.clearReactions()
 	}
 }
 
@@ -49,7 +48,6 @@ client.on('message', msg => {
   else if(msg.content.startsWith(trigger)) {
     const command = msg.content.split(" ")
     command[0] = command[0].replace(trigger, "")
-    msg.react("🤔")
     switch (command[0]) {
       case "help": {
 	msg.author.send(helpMessage)
@@ -101,7 +99,6 @@ client.on('message', msg => {
         bot.requestFulfilled(msg)
       }
       default: {
-      	msg.clearReactions()
       }
     }
   }
