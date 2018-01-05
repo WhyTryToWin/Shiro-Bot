@@ -21,14 +21,30 @@ const helpMessage = `
 **Currency/Social**: \`balance\` \`give\` \`rank\`
 **Misc**: \`conch\` \`choose\` \`cat\` \`catfacts\` \`headpat\` \`bean\`
 **Information**: \`avatar\` \`stats\` \`serverinfo\` \`userinfo\`
-\`\`\`- When using the commands be sure to excluded the aesthetics.
+\`\`\`- Please don't spam the bot, thanks!
 - For Moderation Command list type >>sudo help.\`\`\`
 `
 
 function Shiro() {
 	this.requestFulfilled = msg => {
-	}
+  }
+  this.currencyChange = (user, amount) => {
+    db.users.update(user, { balance: user.balance+amount })
+  }
+  this.getUser = (user) => {
+    let query = db.users.findOne({user});
+    if(!query) {
+      db.users.save({
+        user,
+        balance: 100,
+      })
+      query = db.users.findOne({user})
+    }
+    return query;
+  }
 }
+
+const isInteger = x => x % 1 === 0;
 
 const bot = new Shiro()
 
@@ -50,14 +66,14 @@ client.on('message', msg => {
     command[0] = command[0].replace(trigger, "")
     switch (command[0]) {
       case "help": {
-	msg.author.send(helpMessage)
+        msg.author.send(helpMessage)
         msg.channel.send("I sent help your way in the form of a DM!")
         bot.requestFulfilled(msg)
-        break;
+        break
       }
       case "headpat": {
         msg.channel.send(headpats[0], 'headpat.gif', 'HEAADPATTT')
-        break;
+        break
       }
       case "shutuptowinimtryingsomething": {
         msg.channel.send("SHHHH TOWIN", {
@@ -66,13 +82,26 @@ client.on('message', msg => {
           ]
         })
         bot.requestFulfilled(msg)
-        break;
+        break
       }
       case "conch": {
       	if(command[1]) {
           const responses = ["absolutely not", "possibly", "ask again", "of course", "isn't it obvious?", "what a stupid question.", "YES!", "nope", "of course not", "I honestly have no clue. I'm just a random shell found somewhere, how could I know?"]
           msg.reply(`:shell: | **The magic conch shell says:** \`${responses[Math.floor(Math.random() * responses.length)]}\``)
         }
+        bot.requestFulfilled(msg)
+      }
+      case "honk": {
+        msg.channel.send("HONK HONK!", {
+          files: [
+            'images/honkhonk.gif'
+          ]
+        })
+        break
+      }
+      case "egg": {
+        const responses = ["You're EGGcelent!", "I would make an egg pun but it would be a bad yolk."]
+        msg.reply(`:egg: | **${responses[Math.floor(Math.random() * responses.length)]}**`)
         bot.requestFulfilled(msg)
       }
       case "bean": {
@@ -84,14 +113,42 @@ client.on('message', msg => {
               ]
             })
         bot.requestFulfilled(msg)
-        break;
+        break
       }
       case "balance": {
-        msg.reply("you currently have :gem: 0")
+        let user
+        let target = msg.author;
+        if(command[1]) {
+          target = msg.mentions.members.first();
+          user = bot.getUser(target.id)
+        }else {
+          user = bot.getUser(msg.author.id)
+        }
+        let fill = "you currently have"
+        if(target.id !== msg.author.id)
+          fill = `${client.users.get(target.id).username} currently has`
+        msg.reply(`${fill} :gem: ${user.balance}`)
         bot.requestFulfilled(msg)
-        break;
+        break
+      }
+      case "gamble": {
+        if(!command[1]||!isInteger(command[1]))
+          return
+        const user = bot.getUser(msg.author.id)
+        if(user.balance < command[1])
+          return msg.reply(`Uh oh, you don't have enough gems.`)
+        let random = Math.floor(Math.random() * 2)
+        if(random == 0) {
+          bot.currencyChange(user, -command[1])
+          msg.reply(` Whoops! You lost :gem: ${command[1]}. Better luck next time!`)
+        } else {
+          bot.currencyChange(user, command[1]*2)
+          msg.reply(` Yay! You won :gem: ${command[1]*2}.`)
+        }
       }
       case "give": {
+        if(!command[1]||!command[2]||!isInteger(command[1]))
+          return
         msg.channel.send(`:bank: | Are you sure you wish to transfer: :gem: ${command[1]} to user ${command[2]}? `).then(msg => {
           msg.react("☑")
           msg.react("❌")
