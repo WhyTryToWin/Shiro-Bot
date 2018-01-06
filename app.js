@@ -29,7 +29,7 @@ function Shiro() {
 	this.requestFulfilled = msg => {
   }
   this.currencyChange = (user, amount) => {
-    db.users.update(user, { balance: user.balance+amount })
+    db.users.update(user, { balance: user.balance+parseInt(amount) })
   }
   this.getUser = (user) => {
     let query = db.users.findOne({user});
@@ -55,9 +55,18 @@ client.on('message', msg => {
     console.log(command[1])
     switch(command[1]) {
       case "ban": {
-        if(command[2] && command[3]) {
-          msg.channel.send(`:no_entry:️ | User: ${command[2]} successfully banned for \`${command[3]}\``)
-        }
+        if(!command[2]||!command[3])
+          return
+        target = msg.mentions.members.first()
+        if(!target)
+          return msg.reply(`please mention a user.`)
+        if(!target.bannable)
+          return msg.reply(`:exclamation: | I can't ban this user!`)
+        command.splice(3, 0, command.splice(3, (command.length-1) - 3 + 1).join(' '))
+        target.send(`Uh oh, you were banned for \`${command[3]}\``)
+        setTimeout(
+          () => target.ban(command[3]).catch(err => msg.channel.send(`:exclamation: | \`${err.toString()}\``)).then(() => msg.channel.send(`:no_entry:️ | User: ${command[2]} successfully banned for \`${command[3]}\``))
+        , 250)
       }
     }
   }
@@ -131,20 +140,39 @@ client.on('message', msg => {
         bot.requestFulfilled(msg)
         break
       }
-      case "gamble": {
+      case "spin": {
         if(!command[1]||!isInteger(command[1]))
           return
         const user = bot.getUser(msg.author.id)
         if(user.balance < command[1])
           return msg.reply(`Uh oh, you don't have enough gems.`)
+        if(command[1] < 2)
+          return msg.reply(`you must gamble at least :gem: 2.`)
         let random = Math.floor(Math.random() * 2)
-        if(random == 0) {
-          bot.currencyChange(user, -command[1])
-          msg.reply(` Whoops! You lost :gem: ${command[1]}. Better luck next time!`)
-        } else {
-          bot.currencyChange(user, command[1]*2)
-          msg.reply(` Yay! You won :gem: ${command[1]*2}.`)
-        }
+        msg.channel.send(`**>** :black_large_square: :black_large_square: :black_large_square: **<**`).then(message => {
+          let curr = 0
+          let responses = [`:gem:`, `:regional_indicator_x:`]
+          let x = 0
+          let interval = setInterval(
+            () => {
+              console.log(x)
+              x++
+              message.edit(`**>** ${responses[x]} :black_large_square: :black_large_square: **<**`)
+            }, 100
+          )
+          setTimeout(
+            () => {
+              clearInterval(interval)
+              if(random == 0) {
+                bot.currencyChange(user, -command[1])
+                message.edit(` Whoops! You lost :gem: ${command[1]}. Better luck next time!`)
+              } else {
+                bot.currencyChange(user, command[1])
+                message.edit(` Yay! You won :gem: ${parseInt(command[1])*2}.`)
+              }
+            }, 3000
+          )
+        })
       }
       case "give": {
         if(!command[1]||!command[2]||!isInteger(command[1]))
