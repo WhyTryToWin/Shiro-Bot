@@ -29,14 +29,11 @@ function Shiro() {
 	this.requestFulfilled = msg => {
   }
   this.currencyChange = (user, amount) => {
-    console.log(amount)
     let updatedBalance = user.balance+amount
-    console.log(updatedBalance)
     db.users.update({user: user.user}, { balance: updatedBalance })
-    console.log(db.users.findOne(user))
   }
   this.getUser = user => {
-    let query = db.users.findOne({user});
+    let query = db.users.findOne({user})
     if(!query) {
       db.users.save({
         user,
@@ -45,7 +42,7 @@ function Shiro() {
       })
       query = db.users.findOne({user})
     }
-    return query;
+    return query
   }
   this.indexServer = guild => {
     let query = db.servers.findOne({id: guild.id})
@@ -65,7 +62,7 @@ function Shiro() {
   }
 }
 
-const isInteger = x => x % 1 === 0;
+const isInteger = x => x % 1 === 0
 
 const bot = new Shiro()
 
@@ -260,9 +257,9 @@ client.on('message', msg => {
       }
       case "balance": {
         let user
-        let target = msg.author;
+        let target = msg.author
         if(command[1]) {
-          target = msg.mentions.members.first();
+          target = msg.mentions.members.first()
           user = bot.getUser(target.id)
         }else {
           user = bot.getUser(msg.author.id)
@@ -289,7 +286,6 @@ client.on('message', msg => {
           let x = 0
           let interval = setInterval(
             () => {
-              console.log(x)
               if(x < 3)
                 x++
               message.edit(`**>** ${responses[0].repeat(x)} ${":black_large_square: ".repeat(3-x)} **<**`)
@@ -321,6 +317,7 @@ client.on('message', msg => {
         let target = msg.mentions.members.first()
         if(!target)
           return
+        bot.getUser(target.id)
         msg.channel.send(`:bank: | Are you sure you wish to transfer: :gem: ${command[1]} to user ${target.displayName}? `).then(message => {
           message.react("☑")
           message.react("❌")
@@ -332,7 +329,6 @@ client.on('message', msg => {
             const emojiName = e.emoji.name
             const users = Array.from(e.users.values())
             users.forEach((item, i) => {
-              console.log(command)
               if(item.id == msg.author.id) {
                 if(emojiName == "☑") {
                   let user = db.users.findOne({user: msg.author.id})
@@ -340,8 +336,10 @@ client.on('message', msg => {
                   bot.currencyChange(user, (-1 * Math.abs(parseInt(command[1]))))
                   bot.currencyChange(targetUser, Math.abs(parseInt(command[1])))
                   message.clearReactions()
+                  collector.stop()
                   message.edit(`:bank: | ${msg.author.username} has given ${msg.guild.members.get(target.id).toString()} :gem: ${Math.abs(parseInt(command[1]))}.`)
                 }else if(emojiName == "❌") {
+                  collector.stop()
                   message.clearReactions()
                   message.edit(`:blank: | Canceled.`)
                 }
