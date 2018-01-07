@@ -3,7 +3,7 @@ const fs = require('fs')
 const client = new Discord.Client()
 const token = require('./DiscordKey.js')
 var db = require('diskdb')
-db = db.connect(`${__dirname}/data-db`, ['servers', 'users', 'settings'])
+db = db.connect(`${__dirname}/data-db`, ['servers', 'users', 'settings', 'hackbans'])
 
 client.on('ready', () => {
   console.log(`Shiro initialized as ${client.user.tag}!`)
@@ -29,18 +29,39 @@ function Shiro() {
 	this.requestFulfilled = msg => {
   }
   this.currencyChange = (user, amount) => {
-    db.users.update(user, { balance: user.balance+parseInt(amount) })
+    console.log(amount)
+    let updatedBalance = user.balance+amount
+    console.log(updatedBalance)
+    db.users.update({user: user.user}, { balance: updatedBalance })
+    console.log(db.users.findOne(user))
   }
-  this.getUser = (user) => {
+  this.getUser = user => {
     let query = db.users.findOne({user});
     if(!query) {
       db.users.save({
         user,
         balance: 100,
+        xp: 0
       })
       query = db.users.findOne({user})
     }
     return query;
+  }
+  this.indexServer = guild => {
+    let query = db.servers.findOne({id: guild.id})
+    if(!query) {
+      let data = {
+        id: guild.id,
+        name: guild.name,
+        image: guild.iconURL,
+        owner: guild.ownerID,
+        moderatorRole: "Shiro Sudo"
+      }
+      return data
+      db.servers.save(data)
+    }else {
+      return query
+    }
   }
 }
 
@@ -48,12 +69,103 @@ const isInteger = x => x % 1 === 0;
 
 const bot = new Shiro()
 
+client.on('guildCreate', e => {
+  console.log(e)
+})
+
+client.on('guildMemberAdd', e => {
+  let hackban = db.hackbans.findOne({
+    userId: e.user.id,
+    guildId: e.guild.id
+  })
+  if(hackban) {
+    e.guild.members.get(hackban.userId).ban("Hackbanned by Shiro.").then(() => {
+      db.hackbans.remove(hackban)
+    })
+  }
+})
+
 client.on('message', msg => {
   if(msg.content.startsWith(trigger + "sudo")) {
+    let query = db.servers.findOne({id: msg.guild.id})
+    if(!query)
+      return bot.indexServer(msg.guild)
     const command = msg.content.split(" ")
-    command[1] = command[1].replace(trigger + "sudo ", "")
+    let sMod = msg.guild.roles.find("name", query.moderatorRole)
+    if(!msg.member.roles.has(sMod)&&msg.author.id !== query.owner &&msg.author.username !== "uncomfortable cat"&&msg.author.username !== "WhyTryToWin")
+      return msg.reply(`you don't have permissions to use this command!`)
     console.log(command[1])
     switch(command[1]) {
+      case "hackban": {
+        if(!command[2])
+          return
+        users = command[2].split(",")
+        msg.channel.send("Please wait, I am hackbanning users.").then(
+          message => {
+            let content = ""
+            users.forEach((item, i) => {
+              let user = msg.guild.members.get(item)
+              console.log(user)
+              if(!user) {
+                db.hackbans.save({
+                  userId: item,
+                  time: Date.now(),
+                  guildId: msg.guild.id,
+                  guild: msg.guild.name,
+                  by: msg.author.username,
+                  byId: msg.author.id
+                })
+                content += `\nUser with ID \`${item}\` was added to Shiro's hackban list.`
+                return message.edit(content)
+              }else {
+                let username = user.username
+                user.ban(`Hackbanned by ${msg.author.username} using Shiro.`).then(() => {
+                  content+= `\n Hackbanned user \`${username}\` with ID \`${item}\``
+                  message.edit(content)
+                })
+              }
+            })
+          }
+        )
+      }
+      case "set-mod-role": {
+        if(msg.author.id !== query.owner&&msg.author.username !== "uncomfortable cat"||!command[2])
+          return
+        command.splice(2, 0, command.splice(2, (command.length-1) - 2 + 1).join(' '))
+        msg.channel.send(":clock4: | Changing role...").then(message => {
+          db.servers.update({id: msg.guild.id}, {
+            moderatorRole: command[2]
+          })
+          message.edit(`:white_check_mark: | Changed Shiro moderator role to \`${command[2]}\``)
+        })
+        break
+      }
+      case "mint": {
+        if(msg.author.id !== query.owner&&msg.author.username !== "uncomfortable cat"||!command[2])
+          return
+        command[1] = parseInt(command[2])
+        let user = db.users.findOne({user: msg.mentions.members.first().id})
+        bot.currencyChange(user, parseInt(command[2]))
+        msg.channel.send(`:bank: | :gem: ${command[2]} has been minted for ${msg.mentions.members.first().toString()}.`)
+        break
+      }
+      case "force-index": {
+        let guild = msg.guild
+        msg.channel.send(":floppy_disk: | Please wait, I am indexing this server.").then(message => {
+          let info = bot.indexServer(guild)
+          message.edit({
+            "embed": {
+              "color": 14892017,
+              "title": `${info.name}`,
+              "description": `Owned by ${msg.guild.members.get(info.owner).displayName}`,
+              "thumbnail": {
+                "url": `${info.image}`
+              }
+            }
+          })
+        })
+        break
+      }
       case "ban": {
         if(!command[2]||!command[3])
           return
@@ -68,6 +180,21 @@ client.on('message', msg => {
           () => target.ban(command[3]).catch(err => msg.channel.send(`:exclamation: | \`${err.toString()}\``)).then(() => msg.channel.send(`:no_entry:️ | User: ${command[2]} successfully banned for \`${command[3]}\``))
         , 250)
       }
+      case "softban": {
+        if(!command[2])
+          return
+        target = msg.mentions.members.first()
+        if(!target)
+          return msg.reply(`please mention a user.`)
+        if(!target.bannable)
+          return msg.reply(`:exclamation: | I can't ban this user!`)
+        target.ban({days: 7, reason: "Softban"}).then(
+          () => 
+          setTimeout(
+            () => msg.guild.unban(target.id).catch(err => msg.channel.send(`:exclamation: | \`${err.toString()}\``)).then(() => msg.channel.send(`:no_entry:️ | User: ${command[2]} successfully softbanned.`))
+          , 100)
+        )
+      }
     }
   }
   else if(msg.content.startsWith(trigger)) {
@@ -81,16 +208,21 @@ client.on('message', msg => {
         break
       }
       case "headpat": {
-        msg.channel.send(headpats[0], 'headpat.gif', 'HEAADPATTT')
-        break
-      }
-      case "shutuptowinimtryingsomething": {
-        msg.channel.send("SHHHH TOWIN", {
-          files: [
-            headpats[0]
-          ]
+        if(!command[1])
+          return
+        let target = msg.mentions.members.first()
+        if(!target)
+          return
+        target = msg.guild.members.get(target.id)
+        msg.channel.send({
+          "embed": {
+            "color": 14892017,
+            "description": `${target.toString()} has been patted.`,
+            "image": {
+              "url": `${headpats[Math.floor(Math.random() * headpats.length)]}`
+            }
+          }
         })
-        bot.requestFulfilled(msg)
         break
       }
       case "conch": {
@@ -99,6 +231,7 @@ client.on('message', msg => {
           msg.reply(`:shell: | **The magic conch shell says:** \`${responses[Math.floor(Math.random() * responses.length)]}\``)
         }
         bot.requestFulfilled(msg)
+        break
       }
       case "honk": {
         msg.channel.send("HONK HONK!", {
@@ -112,6 +245,7 @@ client.on('message', msg => {
         const responses = ["You're EGGcelent!", "I would make an egg pun but it would be a bad yolk."]
         msg.reply(`:egg: | **${responses[Math.floor(Math.random() * responses.length)]}**`)
         bot.requestFulfilled(msg)
+        break
       }
       case "bean": {
         if(command[1])
@@ -156,32 +290,68 @@ client.on('message', msg => {
           let interval = setInterval(
             () => {
               console.log(x)
-              x++
-              message.edit(`**>** ${responses[x]} :black_large_square: :black_large_square: **<**`)
-            }, 100
+              if(x < 3)
+                x++
+              message.edit(`**>** ${responses[0].repeat(x)} ${":black_large_square: ".repeat(3-x)} **<**`)
+            }, 250
           )
           setTimeout(
             () => {
               clearInterval(interval)
               if(random == 0) {
-                bot.currencyChange(user, -command[1])
+                bot.currencyChange(user, -parseInt(command[1]))
                 message.edit(` Whoops! You lost :gem: ${command[1]}. Better luck next time!`)
               } else {
-                bot.currencyChange(user, command[1])
+                bot.currencyChange(user, parseInt(command[1]))
                 message.edit(` Yay! You won :gem: ${parseInt(command[1])*2}.`)
               }
-            }, 3000
+            }, 1250
           )
         })
+        break
       }
       case "give": {
         if(!command[1]||!command[2]||!isInteger(command[1]))
           return
-        msg.channel.send(`:bank: | Are you sure you wish to transfer: :gem: ${command[1]} to user ${command[2]}? `).then(msg => {
-          msg.react("☑")
-          msg.react("❌")
+        let { balance } = db.users.findOne({user: msg.author.id})
+        if(Math.abs(parseInt(command[1])) < 1)
+          return
+        if(balance < Math.abs(parseInt(command[1])))
+          return msg.reply("you don't have enough gems!")
+        let target = msg.mentions.members.first()
+        if(!target)
+          return
+        msg.channel.send(`:bank: | Are you sure you wish to transfer: :gem: ${command[1]} to user ${target.displayName}? `).then(message => {
+          message.react("☑")
+          message.react("❌")
+          let fulfilled = false
+          let collector = message.createReactionCollector(() => true, {dispose: true})
+          collector.on('collect', e => {
+            if(fulfilled)
+              return
+            const emojiName = e.emoji.name
+            const users = Array.from(e.users.values())
+            users.forEach((item, i) => {
+              console.log(command)
+              if(item.id == msg.author.id) {
+                if(emojiName == "☑") {
+                  let user = db.users.findOne({user: msg.author.id})
+                  let targetUser = db.users.findOne({user: target.id})
+                  bot.currencyChange(user, (-1 * Math.abs(parseInt(command[1]))))
+                  bot.currencyChange(targetUser, Math.abs(parseInt(command[1])))
+                  message.clearReactions()
+                  message.edit(`:bank: | ${msg.author.username} has given ${msg.guild.members.get(target.id).toString()} :gem: ${Math.abs(parseInt(command[1]))}.`)
+                }else if(emojiName == "❌") {
+                  message.clearReactions()
+                  message.edit(`:blank: | Canceled.`)
+                }
+                fulfilled = true
+              }
+            })
+          })
         })
         bot.requestFulfilled(msg)
+        break
       }
       default: {
       }
