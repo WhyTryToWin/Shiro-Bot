@@ -1,7 +1,7 @@
 const Discord = require("discord.js")
 const fs = require('fs')
 const client = new Discord.Client()
-const token = require('./DiscordKey.js')
+const token = process.env.TOKEN
 var db = require('diskdb')
 db = db.connect(`${__dirname}/data-db`, ['servers', 'users', 'settings', 'hackbans'])
 
@@ -357,4 +357,4 @@ client.on('message', msg => {
   }
 })
 
-client.login(token)
+client.login(token || process.env.TOKEN)
